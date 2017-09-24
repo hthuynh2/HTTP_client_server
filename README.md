@@ -14,7 +14,8 @@ make: to compile all programs
 
 How to run:
 
-Run server: ./http_server <Port>
+Run server: ./http_server [Port]
+
   
 Run client: ./http_client ./http_client http://hostname[:port]/path/to/file
 
