@@ -64,4 +64,3 @@ obj/%.o: src/%.c
 	$(CC) $(COMPILERFLAGS) -c -o $@ $<
 obj:
 	mkdir -p obj
-

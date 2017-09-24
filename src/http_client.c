@@ -150,8 +150,8 @@ int main(int argc, char *argv[])
     printf("%s\n",buf);
     
     FILE * fp = fopen("output", "w");
-    while(recv(sockfd, buf, MAX_STR_LEN, 0) != 0){
-        fputs(buf,fp);
+    while((numbytes = recv(sockfd, buf, MAX_STR_LEN, 0)) != 0){
+        fwrite(buf, sizeof(char), numbytes, fp);
     }
     close(sockfd);
     
