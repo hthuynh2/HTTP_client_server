@@ -8,10 +8,10 @@ make: to compile all programs
 
 How to run:<br />
 Run server: ./http_server Port <br />
-Run client: ./http_client ./http_client http://hostname[:port]/path/to/file
+Run client: ./http_client http://hostname[:port]/path/to/file<br />
 
 Example:<br />
 ./http_server 3490<br />
 ./http_client http://192.166.54.105:3490/test.txt<br />
-If port is not specified, assume port 80 – the standard HTTP port.
+If port is not specified, assume port 80 – the standard HTTP port.<br />
 
