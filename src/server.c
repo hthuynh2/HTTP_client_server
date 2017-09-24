@@ -177,6 +177,7 @@ int main(int argc, const char* argv[])
                     close(new_fd);
                     exit(0);
                 }
+                
                 //Send back data from file
                 while(fgets(buf, MAX_STR_LEN, (FILE*)fp)){
                     if (send(new_fd, buf, strlen(buf), 0) == -1){
@@ -187,10 +188,10 @@ int main(int argc, const char* argv[])
                     }
                 }
             }
-			close(new_fd);
-			exit(0);
+            close(new_fd);
+            exit(0);
 		}
-		close(new_fd);  // parent doesn't need this
+        close(new_fd);  // parent doesn't need this
 	}
 
 	return 0;
