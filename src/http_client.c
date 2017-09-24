@@ -48,7 +48,8 @@ int main(int argc, char *argv[])
     char cmd[MAX_STR_LEN];
     memcpy(cmd, argv[1], strlen(argv[1]));
     char host_name[MAX_STR_LEN] ;
-    char port[MAX_STR_LEN];
+    char port[MAX_STR_LEN] = "80";
+
     char path[MAX_STR_LEN];
     int i = 0;
     int flag = 0;
@@ -85,9 +86,12 @@ int main(int argc, char *argv[])
             path_idx++;
         }
     }
-    port[port_idx] = '\0';
     host_name[host_name_idx] = '\0';
     path[path_idx] = '\0';
+
+    if(port_idx!=0){
+        port[port_idx] = '\0';
+    }
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
