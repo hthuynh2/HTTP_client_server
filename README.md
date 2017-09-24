@@ -7,17 +7,14 @@ The client will be able to GET correctly from standard web servers, and browsers
 
 
 Install: 
-
 make: to compile all programs
 
-
-
 How to run:
-
-Run server: ./http_server [Port]
-
-  
+Run server: ./http_server Port
 Run client: ./http_client ./http_client http://hostname[:port]/path/to/file
 
+Example:
+./http_server 3490
+./http_client http://192.166.54.105:3490/test.txt
 If port is not specified, assume port 80 – the standard HTTP port.
 
