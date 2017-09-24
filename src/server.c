@@ -14,12 +14,21 @@
 #include <arpa/inet.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <string.h>
 
-#define PORT "3490"  // the port users will be connecting to
+//#define PORT "3490"  // the port users will be connecting to
+#define RESPONSE_CODE_404 "HTTP/1.1 404 Not Found\r\n\r\n"
+#define RESPONSE_CODE_404_SIZE 26
+#define RESPONSE_CODE_400 "HTTP/1.1 400 Bad Request\r\n\r\n"
+#define RESPONSE_CODE_400_SIZE 28
+#define RESPONSE_CODE_200 "HTTP/1.1 200 OK\r\n\r\n"
+#define RESPONSE_CODE_200_SIZE 19
+
 
 #define BACKLOG 10	 // how many pending connections queue will hold
 
 #define MAX_STR_LEN 1024
+
 void sigchld_handler(int s)
 {
 	while(waitpid(-1, NULL, WNOHANG) > 0);
@@ -47,13 +56,24 @@ int main(int argc, const char* argv[])
 	char s[INET6_ADDRSTRLEN];
 	int rv;
     
+    char port[MAX_STR_LEN];
+    if(argc == 2){
+        memcpy(port, argv[1], strlen(argv[1]));
+        port[strlen(argv[1])] = '\0';
+    }
+    else{
+        port[0] = '8';
+        port[1] = '0';
+        port[2] = '\0';
+    }
+    
     
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE; // use my IP
 
-	if ((rv = getaddrinfo(NULL, PORT, &hints, &servinfo)) != 0) {
+	if ((rv = getaddrinfo(NULL, port, &hints, &servinfo)) != 0) {
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
 		return 1;
 	}
@@ -110,16 +130,54 @@ int main(int argc, const char* argv[])
 			perror("accept");
 			continue;
 		}
+        //GET /path ....
 
-		inet_ntop(their_addr.ss_family,
-			get_in_addr((struct sockaddr *)&their_addr),
-			s, sizeof s);
+		inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr),s, sizeof s);
 		printf("server: got connection from %s\n", s);
-
 		if (!fork()) { // this is the child process
 			close(sockfd); // child doesn't need the listener
-			if (send(new_fd, "Hello, world!", 13, 0) == -1)
-				perror("send");
+            char buf[MAX_STR_LEN];
+            recv(new_fd, buf, MAX_STR_LEN, 0);
+            char path[MAX_STR_LEN];
+            int path_idx = 0;
+            for(int i = 0 ; i < strlen(buf); i++){
+                if(buf[i] != '/'){
+                    continue;
+                }
+                else{
+                    i++;
+                    while(buf[i] != ' ' && i < MAX_STR_LEN){
+                        path[path_idx] = buf[i];
+                        path_idx++;
+                        i++;
+                    }
+                    path[path_idx] = '\0';
+                    break;
+                }
+            }
+            FILE* fp = fopen(path, "r");
+            if(fp == NULL){
+                if (send(new_fd, RESPONSE_CODE_404, RESPONSE_CODE_404_SIZE, 0) == -1)
+                    perror("send");
+                close(new_fd);
+                exit(0);
+            }
+            else{
+                if (send(new_fd, RESPONSE_CODE_200, RESPONSE_CODE_200_SIZE, 0) == -1){
+                    perror("send");
+                    fclose(fp);
+                    close(new_fd);
+                    exit(0);
+                }
+                while(fgets(buf, MAX_STR_LEN, (FILE*)fp)){
+                    if (send(new_fd, buf, strlen(buf), 0) == -1){
+                        perror("send");
+                        fclose(fp);
+                        close(new_fd);
+                        exit(0);
+                    }
+                }
+            }
 			close(new_fd);
 			exit(0);
 		}
@@ -128,4 +186,11 @@ int main(int argc, const char* argv[])
 
 	return 0;
 }
+
+
+
+
+
+
+
 
