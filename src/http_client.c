@@ -133,23 +133,53 @@ int main(int argc, char *argv[])
     strncpy((char*)(buf + 5), path, strlen(path));
     strncpy((char*)(buf + 5+ strlen(path)), " HTTP/1.1\r\n\0", 11);
     
+    //Send HTTP request
     if (send(sockfd, buf, strlen(buf), 0) == -1){
         perror("send");
         close(sockfd);
         exit(0);
     }
-    
+    //Clear buffer
     memset(buf, 0 , MAX_STR_LEN);
+    
+    //Read from server's response
     if((numbytes = recv(sockfd, buf, MAX_STR_LEN, 0)) == -1){
         perror("receive");
         close(sockfd);
         exit(0);
     }
-       
-    buf[numbytes] = '\0';
-    printf("%s\n",buf);
     
+    char response_msg[MAX_STR_LEN];
+    int response_msg_idx = 0;
+    flag = 0;
+    //Get Header from response msg
+    for(int i = 0 ; i < numbytes; i++){
+        response_msg[response_msg_idx] = buf[i];
+        response_msg_idx++;
+        if(buf[i] == '\r' || buf[i] == '\n')
+            flag++;
+        if(flag == 4)
+            break;
+    }
+    
+    //Print msg header
+    response_msg[response_msg_idx] = '\0';
+    printf("%s\n",response_msg);
+    
+    //Open file
     FILE * fp = fopen("output", "w");
+    if(fp == NULL){
+        fprintf(stderr,"Cannot open file\n");
+        exit(1);
+    }
+    
+    //Write to file remain data from previous receive
+    if(numbytes > response_msg_idx){
+        int remain = numbytes - response_msg_idx;
+        fwrite((char*)(buf + remain), sizeof(char), remain, fp );
+    }
+    
+    //Receive all data from server & write to file
     while((numbytes = recv(sockfd, buf, MAX_STR_LEN, 0)) != 0){
         fwrite(buf, sizeof(char), numbytes, fp);
     }

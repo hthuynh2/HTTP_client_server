@@ -179,10 +179,10 @@ int main(int argc, const char* argv[])
                     close(new_fd);
                     exit(0);
                 }
-                
-                //Send back data from file
-                while(fgets(buf, MAX_STR_LEN, (FILE*)fp)){
-                    if (send(new_fd, buf, strlen(buf), 0) == -1){
+                //Read from file and send data
+                int numbytes;
+                while((numbytes = fread(buf, 1, MAX_STR_LEN, fp)) != 0){
+                    if (send(new_fd, buf, numbytes, 0) == -1){
                         perror("send");
                         fclose(fp);
                         close(new_fd);
