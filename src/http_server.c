@@ -163,8 +163,6 @@ int main(int argc, const char* argv[])
             FILE* fp = fopen(path, "r");
             
             if(fp == NULL){
-                printf("%s\n", path);
-
                 //File not found. Send back error response code
                 if (send(new_fd, RESPONSE_CODE_404, RESPONSE_CODE_404_SIZE, 0) == -1)
                     perror("send");

@@ -30,9 +30,39 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
+/* This function read one line from the socketfd
+ *Argument:     fd: fd to read from
+ *              line: pointer to buffer to store data
+ *Return:       Number of byte read
+ */
+int getline_(int fd, char* line)
+{
+    char c = '\0';
+    char buf[MAX_STR_LEN];
+    int buf_idx = 0;
+    int flag = 0;
+    while(read(fd,&c,1) != 0){
+        buf[buf_idx] = c;
+        buf_idx++;
+        if(c == '\r'){
+            flag = 1;
+        }
+        else if(c == '\n'){
+            if(flag == 1){
+                break;
+            }
+            else{
+                flag = 0;
+            }
+        }
+    }
+    memcpy(line,buf,buf_idx);
+    return buf_idx;
+}
+
 int main(int argc, char *argv[])
 {
-    int sockfd, numbytes;
+    int sockfd;
     char buf[MAX_STR_LEN];
     struct addrinfo hints, *servinfo, *p;
     int rv;
@@ -43,7 +73,6 @@ int main(int argc, char *argv[])
         fprintf(stderr,"Usage: ./http_client <url>\n");
         exit(1);
     }
-    
     
     char cmd[MAX_STR_LEN];
     memcpy(cmd, argv[1], strlen(argv[1]));
@@ -56,6 +85,8 @@ int main(int argc, char *argv[])
     int host_name_idx = 0;
     int port_idx = 0;
     int path_idx = 0;
+    
+    //Parse user input
     for(i = 0 ; i < strlen(cmd); i++){
         if(flag <2){          // "http://"
             if(cmd[i] == '/')
@@ -129,43 +160,59 @@ int main(int argc, char *argv[])
     
     freeaddrinfo(servinfo); // all done with this structure
     
+    //Construct the HTTP Request
     strncpy(buf, "GET /", 5);
     strncpy((char*)(buf + 5), path, strlen(path));
-    strncpy((char*)(buf + 5+ strlen(path)), " HTTP/1.1\r\n\0", 11);
+    strncpy((char*)(buf + 5+ strlen(path)), " HTTP/1.1\r\n", 11);
+    strncpy((char*)(buf + 5+ 11+strlen(path)), "Host: ", 6);
+    strncpy((char*)(buf + 5+ 11+strlen(path) + 6), host_name, strlen(host_name));
+    strncpy((char*)(buf + 5+ 11+strlen(path) + 6 + strlen(host_name)), "\r\nConnection: Keep-Alive\r\n\r\n", 28);
+
     
-    //Send HTTP request
+    printf("%s", buf);
+    
+    //Send HTTP Request
     if (send(sockfd, buf, strlen(buf), 0) == -1){
         perror("send");
         close(sockfd);
         exit(0);
     }
+    
     //Clear buffer
     memset(buf, 0 , MAX_STR_LEN);
+
+    char line[MAX_STR_LEN];
+    int idx = getline_(sockfd, line);
+    int is_ok = 0;
+    int is_chunked = 0;
     
-    //Read from server's response
-    if((numbytes = recv(sockfd, buf, MAX_STR_LEN, 0)) == -1){
-        perror("receive");
-        close(sockfd);
-        exit(0);
+    line[idx] = '\0';
+    printf("%s", line);
+    
+    
+    //Check if status = OK
+    if(strcmp(line,"HTTP/1.1 200 OK\r\n") == 0){
+        is_ok = 1;
     }
-    
-    char response_msg[MAX_STR_LEN];
-    int response_msg_idx = 0;
-    flag = 0;
-    //Get Header from response msg
-    for(int i = 0 ; i < numbytes; i++){
-        response_msg[response_msg_idx] = buf[i];
-        response_msg_idx++;
-        if(buf[i] == '\r' || buf[i] == '\n')
-            flag++;
-        if(flag == 4)
+
+    //Read and print out Header of the response
+    while(1){
+        int idx = getline_(sockfd, line);
+        line[idx] = '\0';
+        printf("%s", line);
+        
+        if(strcmp(line,"Transfer-Encoding: chunked\r\n") == 0){
+            is_chunked = 1;
+        }
+
+        if((line[0] == '\r' && line[1] == '\n'))
             break;
     }
     
-    //Print msg header
-    response_msg[response_msg_idx] = '\0';
-    printf("%s\n",response_msg);
-    
+    //If REPONSE STATUS NOT OK, dont need to write to file
+    if(is_ok != 1){
+        return 0;
+    }
     //Open file
     FILE * fp = fopen("output", "w");
     if(fp == NULL){
@@ -173,18 +220,58 @@ int main(int argc, char *argv[])
         exit(1);
     }
     
-    //Write to file remain data from previous receive
-    if(numbytes > response_msg_idx){
-        int remain = numbytes - response_msg_idx;
-        fwrite((char*)(buf + remain), sizeof(char), remain, fp );
+    memset(line, 0, MAX_STR_LEN);
+    
+    if(is_chunked){         //If Transfer-Encoding is Chunked
+        while(1){
+            //Read line to determine size of Chunk
+            int idx  = getline_(sockfd, line);
+            line[idx] = '\0';
+            int chunk_size = strtol(line, NULL, 16);
+            if(chunk_size == 0){
+                break;
+            }
+            int n = 0;
+            char * my_buf = malloc(chunk_size+3);
+            
+            //Read chunk and write to file
+            while(n < chunk_size){
+                int temp;
+                if((temp = read(sockfd, (char*)(my_buf+n), chunk_size-n+2)) == -1){ //+2 to include "/r/n" at the end of chunk
+                    perror("Cannot read\n");
+                    exit(1);
+                }
+                n += temp;
+            }
+            fwrite(my_buf, sizeof(char), chunk_size, fp);
+            free(my_buf);
+        }
+    }
+    else{               //If Transfer-Encoding is not chunked
+        while(1){
+            int temp;
+            char * my_buf = malloc(MAX_STR_LEN);
+            
+            //Read from socketfd
+            if((temp = read(sockfd, my_buf, MAX_STR_LEN)) == -1){
+                perror("Cannot read\n");
+                exit(1);
+            }
+            //Reach EOF
+            if(temp == 0)
+                break;
+            //Write to file
+            fwrite(my_buf, sizeof(char), temp, fp);
+            free(my_buf);
+        }
     }
     
-    //Receive all data from server & write to file
-    while((numbytes = recv(sockfd, buf, MAX_STR_LEN, 0)) != 0){
-        fwrite(buf, sizeof(char), numbytes, fp);
-    }
-    close(sockfd);
-    
+    fclose(fp);
     return 0;
 }
+
+
+
+
+
 
